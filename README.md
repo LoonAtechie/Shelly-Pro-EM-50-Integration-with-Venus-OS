@@ -10,7 +10,7 @@ Basic Shelly Setup:
 
 Follow Shelly install directions. Install an Ethernet cable between devices.
 
-Channel 0 current coil is attached to HOT wire
+Channel 0 current coil is attached to grid HOT wire
 
 Channel 1 current coil is attached to HOT output of inverter or generator
 
