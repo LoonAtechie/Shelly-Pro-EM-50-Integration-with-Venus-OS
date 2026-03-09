@@ -1,0 +1,162 @@
+#!/usr/bin/python3
+
+VERSION = "0.8"
+
+import sys
+import os
+import asyncio
+import websockets
+import logging
+import ssl
+import json
+import itertools
+from argparse import ArgumentParser
+
+import requests
+
+# 3rd party
+try:
+	from dbus_fast.constants import BusType
+except ImportError:
+	from dbus_next.constants import BusType
+
+# aiovelib
+sys.path.insert(1, os.path.join(os.path.dirname(__file__), 'ext', 'aiovelib'))
+from aiovelib.service import Service
+
+# local modules
+from meter import Meter
+
+wslogger = logging.getLogger('websockets.server')
+wslogger.setLevel(logging.INFO)
+wslogger.addHandler(logging.StreamHandler())
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+tx_count = itertools.cycle(range(1000, 5000)) #was 1000, 5000
+def Delete_All_Data():
+	
+	url = 'http://169.254.1.3/rpc/EM1Data.DeleteAllData?id=0'
+	try:
+		response = requests.get(url)
+		if response.status_code == 200:
+					data = response.json()
+					logger.info("Delete Channel 0 Data Seccessful")
+		else:
+					logger.info("Failed to Delete Channel 0 Data")
+	except:
+		logger.error("Delete Channel 0 Data Error")
+	
+	url = 'http://169.254.1.3/rpc/EM1Data.DeleteAllData?id=1'
+	try:
+		response = requests.get(url)
+		if response.status_code == 200:
+					data = response.json()
+					logger.info("Delete Channel 1 Data Seccessful")
+		else:
+					logger.info("Failed to Delete Channel 1 Data")
+	except:
+		logger.error("Delete Channel 1 Data Error")
+
+def Reset_Counters():
+
+	url = 'http://169.254.1.3/rpc/EM1Data.DeleteAllData?id=0'
+	try:
+		response = requests.get(url)
+		if response.status_code == 200:
+					data = response.json()
+					logger.info("Reset Channel 0 Counter Seccessful")
+		else:
+					logger.info("Failed to Reset Channel 0 Counter")
+	except:
+		logger.error("Reset Channel 0 Counter Error")
+	
+	url = 'http://169.254.1.3/rpc/EM1Data.DeleteAllData?id=1'
+	try:
+		response = requests.get(url)
+		if response.status_code == 200:
+					data = response.json()
+					logger.info("Reset Channel 1 Counter Seccessful")
+		else:
+					logger.info("Failed to Reset Channel 1 Counter")
+	except:
+		logger.error("Reset Channel 1 Counter Error")
+
+
+class Server(object):
+	def __init__(self, make_meter):
+		self.meters = {}
+		self.make_meter = make_meter
+
+	async def __call__(self, socket, path):
+		# If we have a connection to the meter already, kill it and
+		# make a new one
+		if (m := self.meters.get(socket.remote_address)) is not None:
+			m.destroy()
+			del self.meters[socket.remote_address]
+		
+		Delete_All_Data() 	#Clears energy data
+		Reset_Counters()	#Resets EM50 counters
+
+		self.meters[socket.remote_address] = m = self.make_meter()
+		
+		# Tell the meter to send a full status
+		await socket.send(json.dumps({
+			"id": "GetDeviceInfo-{}".format(next(tx_count)),
+			"method":"Shelly.GetDeviceInfo"
+		}))
+		
+		while not m.destroyed:
+			# Decode data, and dispatch it to the gevent mainloop
+			try:
+				data = json.loads(await socket.recv())
+			except ValueError:
+				logger.error("Malformed data in json payload")
+			except websockets.exceptions.WebSocketException:
+				logger.info("Lost connection to " + str(socket.remote_address))
+				m.destroy()
+				break
+			else:
+				if str(data.get('id', '')).startswith('GetDeviceInfo-'):
+					if not await m.start(*socket.remote_address, data):
+						logger.info("Failed to start meter for " + str(socket.remote_address))
+						m.destroy()
+						break
+				else:
+					await m.update(data)
+
+		del self.meters[socket.remote_address]
+
+def main():
+	parser = ArgumentParser(description=sys.argv[0])
+	parser.add_argument('--dbus', help='dbus bus to use, defaults to system',
+			default='system')
+	parser.add_argument('--debug', help='Turn on debug logging',
+			default=False, action='store_true')
+	args = parser.parse_args()
+
+	logging.basicConfig(format='%(levelname)-8s %(message)s',
+			level=(logging.DEBUG if args.debug else logging.INFO))
+	
+	logging.info("Using dbus lib {}".format(
+		BusType.__module__.split('.')[0]))
+
+	bus_type = {
+		"system": BusType.SYSTEM,
+		"session": BusType.SESSION
+	}.get(args.dbus, BusType.SESSION)
+
+	mainloop = asyncio.get_event_loop()
+	mainloop.run_until_complete(
+		websockets.serve(Server(lambda: Meter(bus_type)), '', 8000))
+
+	try:
+		logger.info("Starting main loop")
+		mainloop.run_forever()
+	except KeyboardInterrupt:
+		mainloop.stop()
+
+
+if __name__ == "__main__":
+    main()
