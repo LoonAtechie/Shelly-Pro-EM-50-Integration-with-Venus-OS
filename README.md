@@ -37,6 +37,7 @@ Ensure the file permissions of dbus_shelly.py match the original.
 Note: I only modified GUIv1 pages to work with these mods. GUIv2 is not done.
 
 Go to /opt/victronenergy/gui/qml and remane these files: 
+
 PageAcInModel.qml to PageAcInModel.qml.org and DetailAcInput.qml to DetailAcInput.qml.org
 
 Import the modified .qml files into this directory.
@@ -45,4 +46,4 @@ Import the modified .qml files into this directory.
 Reboot.
 
 
-Disclaimer- I have very limited coding skills and very new to this platform. Welcome any advice for improvement.
+Disclaimer- I have very limited Python and Venus-OS knowledge. Welcome any advice for improvements or implementations!
