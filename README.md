@@ -30,9 +30,17 @@ Venus OS Setup:
 
 Go to /opt/victronenergy/dbus-shelly and rename dbus_shelly.py to dbus_shelly.py.org and meter.py to meter.py.org
 
-Import the modified files into this directory.
+Import the modified .py files into this directory.
 
 Ensure the file permissions of dbus_shelly.py match the original.
+
+Note: I only modified GUIv1 pages to work with these mods. GUIv2 is not done.
+
+Go to /opt/victronenergy/gui/qml and remane these files: 
+PageAcInModel.qml to PageAcInModel.qml.org and DetailAcInput.qml to DetailAcInput.qml.org
+
+Import the modified .qml files into this directory.
+
 
 Reboot.
 
